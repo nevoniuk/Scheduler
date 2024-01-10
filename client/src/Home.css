@@ -1,0 +1,23 @@
+.Center {
+    position: absolute;
+    margin-top: -100px;
+    margin-left: -100px;
+    width: 200px;
+    height: 200px;
+    top: 50%;
+    left: 50%;
+}
+.Login {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-arround;
+}
+
+.Item {
+    flex: initial
+}
+
+.Button {
+    flex: initial
+}
