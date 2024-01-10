@@ -1,7 +1,7 @@
-
 const { 
-	v4: uuidv4,
-  } = require('uuid');
+v4: uuidv4,
+} = require('uuid');
+
 const Pool = require('pg').Pool
 const pool = new Pool({
   user: 'newuser',
@@ -14,10 +14,11 @@ const pool = new Pool({
 //wont create a user if one already exists
 const createUser = (body) => {
 	return new Promise(function (resolve, reject) {
-	  const { name, email, password } = body;
+	  const {email, password } = body;
+	  var id = uuidv4()
 	  pool.query(
-		"INSERT INTO users (userid, email, password) VALUES ($1, $2, $3) RETURNING *",
-		[name, email, password],
+		"INSERT INTO users (id, email, password) VALUES ($1, $2, $3) RETURNING *",
+		[id, email, password],
 		(error, results) => {
 		  if (error) {
 			reject(error);
@@ -49,14 +50,14 @@ const createUser = (body) => {
 			reject(error);
 		  }
 		  if (results && results.rows && (results.rows[0] != undefined)) {
-			console.log(results.rows[0])
-			//id exists then create login token
 			var d = Date().indexOf('G');
 			var token = uuidv4();
+			var id = results.rows[0]
+			var userid = id["id"]
 			pool.query(
-				"INSERT INTO loginattempts (token, email, date) VALUES ($1, $2, $3) RETURNING *",
+				"INSERT INTO loginattempts (token, userid, date) VALUES ($1, $2, $3) RETURNING *",
 				
-				[token, emailText, Date().slice(0, d-1)],
+				[token, userid, Date().slice(0, d-1)],
 				(error, results) => {
 				  if (error) {
 					console.log("error" + error)
