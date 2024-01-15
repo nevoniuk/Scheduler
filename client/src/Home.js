@@ -76,7 +76,7 @@ function Home() {
                       </p>
                   </div>
                   <div className="flex items-center justify-between">
-                    <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" disabled = {status === ''} onClick={verifyCredentials} type="button">
+                    <button className="bg-navbar text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" disabled = {status === ''} onClick={verifyCredentials} type="button">
                       Login
                     </button>
                     <a className="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800" href="#">
@@ -90,35 +90,7 @@ function Home() {
         
        
     );
-    /**
-     * <div classNameName='Body'>
-
-				<form classNameName="Login" onSubmit={login}>
-					<div classNameName="Item">
-						<input value={emailText} onChange={handleEmailChange}/>
-					</div> 
-					<div classNameName="Item">
-						<input type={passwordText} onChange={handlePasswordChange}/>
-					</div>
-					<div classNameName="Button">
-						<button disabled = {status === ''} onClick={login}> Login </button>
-						
-					</div>
-					<div classNameName='Error'>
-						{error !== null &&
-							<p>
-								{error.message}
-							</p>
-						}
-					</div>
-				</form>
-				
-        </div>
-     */
-    /**
-     * 
-     */
-
+   
 }
 
 

@@ -1,21 +1,24 @@
 import React, {useState, useCallback, useEffect} from 'react';
-function SideBar({onEventsChanged}) {
+import WeekEvents from './WeekEvents';
+function SideBar(props) {
 	//have a form that drops beneath it
 	const [form, showForm] = useState(false)
 	const onClick = () => showForm(!form)
-	
+	console.log(props.diffevents)
 	return (
 		<>
-			<div class="relative pl-3 my-5 flex relative flex-col items-center bg-white">
-				<div class=" w-full max-w-xs ">
-					{form ? <Form onEventsChanged={onEventsChanged} showForm={showForm}/> : null}
+			<div className="pl-3 my-5 flex relative flex-col w-full h-full flex-shrink items-center">
+				<div className="w-full max-w-xs">
+					{form ? <Form handleConflicts={props.handleConflicts} onEventsChanged={props.onEventsChanged} showForm={showForm} addConflict={props.addConflict} conflictingEvents={props.conflictingEvents}/> : null}
 					<div>
 						{(!form) ? <>
-							<span class="select-none flex items-center px-4 py-[.775rem] cursor-pointer my-[.4rem] rounded-[.95rem]">
-							<button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="submit" onClick={onClick}> Add Event </button>
-						</span></> : null}
+							<span class="pr-3 select-none h-full w-full rounded-[.95rem]">
+								<button className="leading-none bg-navbar text-white hover:text-teal-500 text-sm px-4 py-2 rounded focus:outline-none focus:shadow-outline" onClick={onClick}> Add Event </button>
+							</span>
+						</> : null}
 					</div>
 				</div>
+				<WeekEvents upcoming={props.upcoming} diffevents={props.diffevents}/>
 			</div>
 		</>
 		
@@ -24,7 +27,7 @@ function SideBar({onEventsChanged}) {
 export default SideBar;
 
 
-function Form({onEventsChanged, showForm}) {
+function Form({onEventsChanged, showForm, handleConflicts, addConflict, conflictingEvents}) {
 	
 	const [name, setName] = useState('')
 	const [start, setStart] = useState('')
@@ -32,16 +35,26 @@ function Form({onEventsChanged, showForm}) {
 	const [details, setDetails] = useState('')
 	const [error, setError] = useState(false)
 	const [date, setDate] = useState('')
+
+	useEffect(() => {
+		if (addConflict === "add" && conflictingEvents.length > 0) { //should only run when alert confirms add conflict
+			console.log(conflictingEvents)
+			console.log("ADD CONFLICT")
+			submitEvent(start, end)
+		} else if (addConflict === "cancel") {
+			showForm(false)
+			handleConflicts([])
+		}
+	}, [addConflict])
+
 	function handleShowForm() {
 		showForm(false)
 	}
 	function handleNameChange(e) {
-
         setName(e.target.value)
 
     }
 	function handleStart(e) {
-		//convert to local ti
         setStart(e.target.value)
     }
 	function handleEnd(e) {
@@ -56,10 +69,39 @@ function Form({onEventsChanged, showForm}) {
         setDate(e.target.value)
     }
 
+	async function checkConflicts(start, end) { //loads all the events for a given week(hardcoded week range)
+		console.log(start)
+		console.log(end)
+		let res = []
+		let url = 'http://localhost:3002/eventconflicts/?startDate=' + start.toUTCString() + '&endDate=' + end.toUTCString()
+		 const p = (await fetch(url,
+		 {
+			 method: 'GET',
+			 headers: {
+				 'Content-Type': 'application/json',
+				 'Authorization': 'Bearer ' + localStorage.getItem('token')
+			   },
+		 }).then(async data => {
+			if (data.status === 204) {
+				console.log("here")
+				submitEvent(start, end)
+				//means that there are no conflicts
+			}
+			else if (data.status !== 200) {
+				throw new Error(data)
+			}
+			else { //means that there are conflicts
+				res = await data.json();
+				handleConflicts(res) //function in calender
+			}
+		}).catch(err => console.log(err))) 
+	}
+
 	async function submitEvent(start, end) {
 		var result;
 		console.log(start)
 		console.log(end)
+		console.log(details)
 		 const p = (await fetch('http://localhost:3002/events',
 		 {
 			 method: 'POST',
@@ -76,6 +118,7 @@ function Form({onEventsChanged, showForm}) {
 			  	console.log(result)
 				onEventsChanged(true)
 				showForm(false)
+				handleConflicts([])
 			}
 			
 		}).catch(err => console.log(err))) 
@@ -91,60 +134,64 @@ function Form({onEventsChanged, showForm}) {
 		}
 		startDate.setFullYear(date.slice(6,10), date.slice(0, 2) - 1, date.slice(3,5))
 		endDate.setFullYear(date.slice(6,10), date.slice(0, 2) - 1, date.slice(3,5))
-		var sHours = (start.includes("pm")) ? (parseInt(start.slice(0, 2)) + 12) : parseInt(start.slice(0, 2))
-		var eHours = end.includes("pm") ? (parseInt(end.slice(0, 2)) + 12) : parseInt(end.slice(0, 2))
+		var sHours = (start.includes("pm") && (parseInt(start.slice(0, 2)) !== 12)) ? (parseInt(start.slice(0, 2)) + 12) : parseInt(start.slice(0, 2))
+		var eHours = (end.includes("pm") && (parseInt(end.slice(0, 2)) !== 12)) ? (parseInt(end.slice(0, 2)) + 12) : parseInt(end.slice(0, 2))
+		
 		var sMin = parseInt(start.slice(3,5))
 		var eMin = parseInt(end.slice(3,5))
 		startDate.setHours(sHours, sMin)
 		endDate.setHours(eHours, eMin)	
-		submitEvent(startDate, endDate)
+		setStart(startDate)
+		setEnd(endDate)
+		//submitEvent(startDate, endDate)
+		checkConflicts(startDate, endDate)
 	}
 	return (
-		<form className="bg-navbar shadow-md rounded px-8 pt-6 pb-8 mb-4" onSubmit={convertDateTime}>
-			<div className="mb-4">
+		<form className="bg-navbar shadow-md rounded pt-5 pb-8 mb-4" onSubmit={convertDateTime}>
+			<div className="mb-4 px-8">
 				<label className="block text-gray-700 text-sm font-bold mb-2" for="name">
 					Enter Event Name
 				</label>
 				<input className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
 				onChange={handleNameChange} id="name" type="text" placeholder="Name" />
 			</div>
-			<div className="mb-4">
+			<div className="mb-4 px-8">
 				<label className="block text-gray-700 text-sm font-bold mb-2" for="start">
 					Enter Start Time
 				</label>
 				<input className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
 				onChange={handleStart} id="start" type="text" placeholder="HH:MM (pm/am)" />
 			</div>
-			<div className="mb-4">
+			<div className="mb-4 px-8">
 				<label className="block text-gray-700 text-sm font-bold mb-2" for="end">
 					Enter End Time
 				</label>
 				<input className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
 				onChange={handleEnd} id="end" type="text" placeholder="HH:MM (pm/am)" />
 			</div>
-			<div className="mb-4">
+			<div className="mb-4 px-8">
 				<label className="block text-gray-700 text-sm font-bold mb-2" for="date">
 					Enter Date
 				</label>
 				<input className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
 				onChange={handleDate} id="date" type="text" placeholder="MM/DD/YYYY" />
 			</div>
-			<div className="mb-4">
+			<div className="mb-4 px-8">
 				<label className="block text-gray-700 text-sm font-bold mb-2" for="details">
 					Enter Details
 				</label>
 				<input className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
 				onChange={handleDetails} id="details" type="text" placeholder="Details" />
 			</div>
-			<label className="block text-red-700 text-sm font-bold mb-2" for="error">
+			<label className="block px-8 text-red-700 text-sm font-bold mb-2" for="error">
 					{error ? <>Incorrect Date/Time Format</> : null}
 			</label>
-			<div className='flex ml-0 pl-0 flex-row space-between'>
-				<span class="select-none flex items-center px-4 py-[.775rem] cursor-pointer my-[.4rem] rounded-[.95rem]">
-						<button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="button" onClick={convertDateTime}> Submit </button>
+			<div className='px-8 items-center'>
+				<span class="cursor-pointer my-[.4rem] px-2 rounded-[.95rem] mb-4">
+						<button className=" hover:bg-white-700 text-white font-bold py-2  rounded focus:outline-none focus:shadow-outline" type="button" onClick={convertDateTime}> Submit </button>
 				</span>
-				<span class="select-none flex items-center px-4 py-[.775rem] cursor-pointer my-[.4rem] rounded-[.95rem]">
-						<button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="button" onClick={handleShowForm}> Cancel </button>
+				<span class="cursor-pointer my-[.4rem] px-2 rounded-[.95rem]">
+						<button className=" hover:bg-white-700 text-white font-bold py-2 rounded focus:outline-none focus:shadow-outline" type="button" onClick={handleShowForm}> Cancel </button>
 				</span>
 			</div>
 			
@@ -152,42 +199,4 @@ function Form({onEventsChanged, showForm}) {
 	);
 
 }
-/**
- * <div className="h-screen flex items-center overflow-y-scroll bg-white justify-center">
-           <div className="w-full max-w-xs">
-              <form className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4" onSubmit={verifyCredentials}>
-                  <div className="mb-4">
-                      <label className="block text-gray-700 text-sm font-bold mb-2" for="emailText">
-                          Username
-                      </label>
-                      <input className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                      onChange={handleEmailChange} id="emailText" type="text" placeholder="Email" />
-                  </div>
-                  <div className="mb-6 ">
-                      <label className="block text-gray-700 text-sm font-bold mb-2" for="passwordText">
-                        Password
-                      </label>
-                      <input className="shadow appearance-none border border-red-500 rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline"
-                      onChange={handlePasswordChange} id="passwordText" type="password" placeholder="Password" />
-                      <p className="text-red-500 text-xs italic">
-                                    {error !== null &&
-                                            <p>
-                                                {error.message}
-                                            </p>
-                                        }
-                      </p>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" disabled = {status === ''} onClick={verifyCredentials} type="button">
-                      Login
-                    </button>
-                    <a className="inline-block align-baseline font-bold text-sm text-blue-500 hover:text-blue-800" href="#">
-                      Forgot Password?
-                    </a>
-                  </div>
-              </form>
-            </div>
 
-      </div>
- * 
- */

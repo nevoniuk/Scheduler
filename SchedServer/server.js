@@ -5,6 +5,7 @@ const port = 3002
 const user_model = require('./user')
 const token_model = require('./token')
 const event_model = require('./event')
+const NoReportsError = require('./Errors')
 
 app.use(express.json())
 
@@ -15,6 +16,18 @@ app.use(function (req, res, next) {
   next();
 })
 
+app.get('/eventconflicts', (req, res) => {
+  event_model.getConflictEvents(req.headers, req.query)
+  .then(response => {
+    res.status(200).send(response);
+  })
+  .catch(error => {
+    if (error.name === "NoReportsError") {
+      res.status(204).send(error);
+    } else {res.status(500).send(error);}
+  })
+})
+
 app.get('/events', (req, res) => {
   
   event_model.getEvents(req.headers, req.query)
@@ -22,7 +35,9 @@ app.get('/events', (req, res) => {
     res.status(200).send(response);
   })
   .catch(error => {
-    res.status(500).send(error);
+    if (error.name === "NoReportsError") {
+      res.status(204).send(error);
+    } else {res.status(500).send(error);}
   })
 })
 

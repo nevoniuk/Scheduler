@@ -2,169 +2,190 @@ import React, {useState, useCallback, useEffect} from 'react';
 import './Calender.css';
 import NavBar from './Components/Navbar'
 import SideBar from './Components/SideBar'
+import Alert from './Components/Alert'
 /**
  * 1. Front end queries with dates in UTC time
  * 2. Front end receives responses in UTC time and converts to local time
  */
 
-const Days = ["Mon", "Tue", "Wed", "Thurs", "Fri", "Sat", "Sun"]
-let days = []
+const Days = ["Sun", "Mon", "Tue", "Wed", "Thurs", "Fri", "Sat"]
 var currdate = new Date()
-var currstartdate = new Date()
-currstartdate.setDate(currstartdate.getDate() - 7)
+currdate.setHours(0,0,0)
+var currenddate = new Date()
+currenddate.setHours(0,0,0)
+currenddate.setDate(currenddate.getDate() + 7)
 
-function Calender(props) { 
-    const date = new Date('March 14, 23 16:00')
-    const date3 = new Date('March 14, 23 21:20')
+function Calender() { 
+ 
     const [eventsChanged, setEventsChanged] = useState(false)
-    const [addedDays, setDays] = useState(false)
-    const [arrow, setArrow] = useState("")
-    const [endDate, setEndDate] = useState(currdate)
-    const [startDate, setStartDate] = useState(currstartdate)
-    console.log(startDate)
-    console.log(endDate)
-    let dayEvents = []
+    const [days, setDays] = useState([])
+    let arrow = ""
+    var millisecondsInWeek = 86400000 * 7
+    const [endDate, setEndDate] = useState(currenddate)
+    const [startDate, setStartDate] = useState(currdate)
+    const [conflictingEvents, setConflictingEvents] = useState([])
+    const [addConflict, setAddConflict] = useState("")
+    const [upcoming, setUpcoming] = useState(null)
+    let hours  = Array.apply(null, Array(25))
+    
+   function handleUpcoming(events) {
+
+        if ( upcoming === null && (startDate.getDate() ===  currdate.getDate()) && (startDate.getMonth() === currdate.getMonth())) {
+            setUpcoming(events)
+        }
+   }
 
     function arrowChanged(e) {
-        setArrow(e.target.getAttribute('keyValue'))
+        arrow = e.target.getAttribute('keyValue')
         changeHours()
+    }
+
+    function handleConflicts(events) {
+        setConflictingEvents(events)
+        setAddConflict("") //otherwise navbar stays as "cancel, or add"
+    }
+    function handleAddConflicts(v) {
+        let newVal = v
+        setAddConflict(newVal) //need a new object
     }
     function changeHours() {
         if (arrow === "forward") {
-            console.log("forward")
             setStartDate(endDate)
-            var newEnd = new Date()
-            newEnd.setDate(endDate.getDate() + 7)
+            var newEnd = new Date(endDate.getTime() + millisecondsInWeek)
             setEndDate(newEnd)
+            loadEvents(endDate, newEnd)       
         }
         else if (arrow === "back") {
-            console.log("back")
             setEndDate(startDate)
-            var newStart = new Date()
-            newStart.setDate(startDate.getDate() - 7)
+            var newStart = new Date(startDate.getTime() - millisecondsInWeek)
             setStartDate(newStart)
-            
+            loadEvents(newStart, startDate)
         }
-        console.log("new is " + startDate)
-        console.log("new is " + endDate)
     }
-
-    useEffect(() => {
-        //setEventsChanged(false)
-        //loadEvents()
-        console.log(startDate)
-        console.log(endDate)
-    }, [startDate, endDate])
-
     const onEventsChanged = () => {
         setEventsChanged(true)
     };
-    useEffect(() => {//triggers rerender when events have changed
+
+    useEffect(() => {//triggers rerender when events have changed and for initial render
         setEventsChanged(false)
-        loadEvents()
+        loadEvents(startDate, endDate) //these dates have not changed
     }, [eventsChanged])
 
-    useEffect( ()=> { //triggers rerender when days array is finished
-    }, [addedDays])
-
-    async function loadEvents() { //loads all the events for a given week(hardcoded week range)
-       // console.log(date)
-        //console.log(date3)
+    async function loadEvents(startDate, endDate) { //loads all the events for a given week(hardcoded week range)
         let res = []
-        let url = 'http://localhost:3002/events/?startDate=' + date.toUTCString() + '&endDate=' + date3.toUTCString()
+        let url = 'http://localhost:3002/events/?startDate=' + startDate.toUTCString() + '&endDate=' + endDate.toUTCString()
          const p = (await fetch(url,
          {
              method: 'GET',
              headers: {
                  'Content-Type': 'application/json',
                  'Authorization': 'Bearer ' + localStorage.getItem('token')
-               },
+            },
          }).then(async data => {
-            res = await data.json();
-            if (data.status !== 200) {
-              throw new Error(data.statusText)
-            } else {
-              dayEvents = res
-              var startDate = new Date(date)
-              var endDate = new Date(date3)
-              createDays(startDate, endDate)
+            if (data.status === 204) {
+                getDays([], startDate, endDate)
             }
-            
+            else if (data.status !== 200) {
+                throw new Error(data)
+            }
+            else {
+                res = await data.json();
+                console.log(res)
+                getDays(res, startDate, endDate)
+            }
         }).catch(err => console.log(err))) 
     }
-    
-    /** Creates an array of day objects that contain corresponding events and converts UTC to local*/
-   function createDays(startDate, endDate) {
-        days = []
-        let start = new Date(dayEvents[0].startdate)
-        var offset = start.getTimezoneOffset() / 60
-        start.setHours(start.getHours() - offset)
 
-        for (let i = 0; i < dayEvents.length; i++) {
-            let event = dayEvents[i]
-            var d1 = new Date(event.startdate)
-            var d2 = new Date(event.enddate) 
-            d1.setHours(d1.getHours() - offset)  
-            d2.setHours(d2.getHours() - offset)
-            event.startdate = d1
-            event.enddate = d2
-            //console.log("start is " + event.startdate) 
-           // console.log("end is " +event.enddate)       
-            let index = event.startdate.getDate() - start.getDate()
-            
-            if (days[index] === undefined) {
-                
-                days[index] = {
-                    "name": Days[event.startdate.getDay()],
-                    "numevents": 0,
-                    "Events": []
+    function getDays(dayEvents, startDate, endDate) {
+
+        let tempdays = []
+        var counter = 0;
+        if (dayEvents.length != 0) { //hours to subtract
+            var offset = new Date(dayEvents[0].startdate).getTimezoneOffset() / 60
+        }
+        //dates are in ascending order
+        for (let i = 0; i < 8; i++) {
+            tempdays[i] = {
+                "name": Days[(startDate.getDay() + i) % 7],
+                "numevents": 0,
+                "Events": []
+            }
+            var date = new Date(startDate)
+            date.setDate(date.getDate() + i)
+            tempdays[i].date = date.toLocaleDateString()
+            if (counter < dayEvents.length) {
+                let s = new Date(dayEvents[counter].startdate)
+                s.setHours(s.getHours() - offset) 
+                let tempDate = new Date(startDate)
+                tempDate.setDate(tempDate.getDate() + i)
+                while (s.getDate() === tempDate.getDate()) {
+                    let event = dayEvents[counter]
+                    let start = new Date(event.startdate)
+                    let end = new Date (event.enddate)
+                    start.setHours(start.getHours() - offset)
+                    end.setHours(end.getHours() - offset)
+                    event.startdate = start
+                    event.enddate = end
+                    //already defined a day object above
+                    let arr = []
+                    if (tempdays[i].Events !== null) {
+                        arr = tempdays[i].Events
+                    }
+                    arr.push(event)
+                    tempdays[i].Events = arr
+                    tempdays[i].numevents = tempdays[i].numevents + 1
+                    counter += 1
+                    if (counter === dayEvents.length) {
+                        break;
+                    } else {
+                        s = new Date(dayEvents[counter].startdate) //converts to local automatically
+                        s.setHours(s.getHours() - offset)
+                    }
                 }
             }
-            let arr = days[index].Events
-            days[index].numevents = days[index].numevents + 1;
-            arr.push(event)
         }
-        //now fill in days with no events
-        let day = start.getDate()
-        let startday = day
-        let lastday = day + 7
-      
-      
-        while (day <= lastday) {
-            let index = day - startday
-            if (days[index] == undefined) {
-                //TODO implement logic in case month changed or year changed
-                start.setDate(day)
-                days[index] = {
-                    "name": Days[start.getDay()], 
-                    "numevents": 0,
-                    "Events": []
-                }
-            }
-            days[index].date = new Date(start.setDate(day)).toLocaleDateString()
-            day = day + 1
-        }
-        setDays(true)
+        setDays(tempdays)
+        handleUpcoming(tempdays)
     }
-
+    /** Creates an array of day objects that contain corresponding events and converts UTC to local*/
     return (
         <div className='body'>
+            <div>{conflictingEvents != undefined && conflictingEvents.length > 0 && 
+                < Alert conflicts={conflictingEvents} handleAddConflicts={handleAddConflicts} handleConflicts={handleConflicts}/>}
+            </div>
             <div className='Container'>
                 <NavBar startDate={startDate} endDate={endDate} arrowChanged={arrowChanged}/>
                 <div className='ContainerOne'>
-                    <SideBar onEventsChanged={onEventsChanged}/>
-                        {addedDays && 
+                    {(days.length > 0) &&
+                        <SideBar handleConflicts={handleConflicts} onEventsChanged={onEventsChanged} addConflict={addConflict}
+                        conflictingEvents={conflictingEvents} upcoming={upcoming} diffevents={days}/>
+                    }
+                    
+                        {(days.length > 0) && 
                             <div className='Day-Names'>
                                 {days.map((_, index) => (
-                                <div key={index} className='Day-Title'>{days[index].name +"\n"+ days[index].date}</div>
+                                <div key={index} className='text-sm my-6 px-2 py-2 leading-none border rounded text-black border-navbar'>
+                                    <p>{days[index].name}</p>
+                                    <p>{days[index].date}</p>
+                                </div>
                                 ))}
                             </div>}
-                    {addedDays && 
-                    <div className='WeekView'>
-                            {days.map((_, index) => (
-                                <Day key={index} day={days[index]}/>
-                            ))}
-                    </div>
+                    {(days.length > 0) && 
+                        <div className='WeekViewContainer'>
+                           <div className='Numberline'>
+                                {hours.map((_, index) => (
+                                    <div className='text-xs'>{(((index % 12) == 0)? (12) : (index % 12))
+                                        + ((index == 0) ? ("am") : ("")) + ((index == 12) ? ("pm") : (""))}
+                                    </div>     
+                                ))}
+                            </div>
+                            
+                            <div className='WeekView'>
+                                {days.map((_, index) => (
+                                        <Day key={index} day={days[index]}/>
+                                    ))}
+                            </div>
+                        </div>
                     }
                 </div>
             </div>
@@ -173,8 +194,8 @@ function Calender(props) {
     );
 }
 /**Adds all events for a day into flex box rows */
-function Day(props) {
 
+function Day(props) {
     const style = {
         width: '100%',
         display: 'grid',
@@ -195,14 +216,14 @@ function Day(props) {
 
     let events = props.day.Events;
     let i = 0;
-    let rowEndTimes = [] //contains each row with events
+    let rowEndTimes = []
     let hours  = Array.apply(null, Array(25))
-   
+  
  
     while (i < events.length) {
         var start = events[i].startdate
         let j = 0
-        for (j = 0; j < rowEndTimes.length; j++) { //search which row to place the event
+        for (j = 0; j < rowEndTimes.length; j++) {
             let arr = rowEndTimes[j]
             let lastTime = arr[arr.length - 1].enddate
             if (lastTime < start) {
@@ -219,9 +240,6 @@ function Day(props) {
         }
        i++;
     }
-   
-  
-
     return (
         <div className='DayRow'>
             <div className='a'>
@@ -245,7 +263,7 @@ function Day(props) {
 
 /**Determines how the events in each row appear on the grid */
 
-function EventRow({events, handleDisplayEvent}) { //calculate offset at the start time of the first hour
+function EventRow({events, handleDisplayEvent}) { 
     
     function handleEventClicked(e) {
         var i = e.target.getAttribute('keyValue')
@@ -253,15 +271,11 @@ function EventRow({events, handleDisplayEvent}) { //calculate offset at the star
         handleDisplayEvent(events[ev])
     }
     
-
     let styles = []
     var total = 3600000 * 24
-   
     let s = events[0].startdate
     var d = new Date(s.getFullYear(), s.getMonth(), s.getDate(), 0, 0, 0) //midnight that same day
     let start = ((events[0].startdate - d) / total) * 100
-    
-
     const rowStyle = {
         width: '100%',
         height: '100%',
@@ -270,23 +284,32 @@ function EventRow({events, handleDisplayEvent}) { //calculate offset at the star
         marginLeft: '' + start + '%',
         gap: '2px',
         flexShrink: '1',
+        marginTop: '1px'
     }
-
+    var prev = null
     for (let i = 0; i < events.length; i++) {
+
         var diff = (events[i].enddate - events[i].startdate)
  
         var t = (diff / total) * 100
-        const style = {
+        let style = {
             flexBasis: '' + (t) +'%',
             backgroundColor: '#a0a7be',
-            borderRadius: '1px'
+            borderRadius: '2px'
         }
+        if (i > 0) {
+            let margin = ((events[i].startdate - prev.enddate) / total) * 100
+            style = {
+                flexBasis: '' + (t) +'%',
+                backgroundColor: '#a0a7be',
+                borderRadius: '2px',
+                marginLeft: '' + margin + '%',
+            }
+        }
+        prev = events[i]
         styles.push(style)
     }
-//one popup per row
-//
     return (
-
         <div className='eventRow' style={rowStyle}>
             {styles.map((_, index) => (
                 <>
@@ -294,9 +317,6 @@ function EventRow({events, handleDisplayEvent}) { //calculate offset at the star
                 </>
             ))}
         </div>
-
-
-   
     );
     
 }
@@ -308,10 +328,8 @@ function Hour({hour}) {
         gridRowStart: 1,
         gridRowEnd: "span 1", 
         background: 'white',
-       
-        
     }
-   return (
+    return (
         <>
             <div style={style} ></div>
         </>
@@ -323,46 +341,44 @@ function Popup(props) {
         props.handleDisplayEvent(null)
     }
     return (
-        
-            <div className="w-30 h-20 flex flex-col items-center absolute justify-center">
-                <div className=" bg-navbar shadow-md overflow-scroll rounded px-8 pt-6 pb-8 mb-4">
-                    <div className="mb-4">
-                        Event:
-                            <label className="block text-gray-700 text-sm font-light mb-2">
-                            {props.displayEvent.name}
-                            </label>
-                    </div>
-                    <div className="mb-4">
-                        Details:
-                            <label className="block text-gray-700 text-sm font-light mb-2">
-                            {props.displayEvent.details}
-                            </label>
-                    </div>
-                    <div className="mb-4">
-                        Start:
-                            <label className="block text-gray-700 text-sm font-light mb-2" >
-                            {props.displayEvent.startdate.toLocaleString()}
-                            </label>
-                    </div>
-                    <div className="mb-4">
-                        End:
-                            <label className="block text-gray-700 text-sm font-light mb-2" >
-                            {props.displayEvent.enddate.toLocaleString()}
-                            </label>
-                    </div>
-                    <div className='bottom-0 right-0'>
-                        <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold mb-0 mr-0 rounded focus:outline-none focus:shadow-outline" 
-                        onClick={handleClick}>X</button>
-                    </div>
+        <div className="w-30 h-20 flex flex-col items-center absolute justify-center">
+            <div className=" bg-navbar shadow-md overflow-scroll rounded px-8 pt-6 pb-8 mb-4">
+                <div className="mb-4">
+                    Event:
+                        <label className="block text-gray-700 text-sm font-light mb-2">
+                        {props.displayEvent.name}
+                        </label>
+                </div>
+                <div className="mb-4">
+                    Details:
+                        <label className="block text-gray-700 text-sm font-light mb-2">
+                        {props.displayEvent.details}
+                        </label>
+                </div>
+                <div className="mb-4">
+                    Start:
+                        <label className="block text-gray-700 text-sm font-light mb-2" >
+                        {props.displayEvent.startdate.toLocaleString()}
+                        </label>
+                </div>
+                <div className="mb-4">
+                    End:
+                        <label className="block text-gray-700 text-sm font-light mb-2" >
+                        {props.displayEvent.enddate.toLocaleString()}
+                        </label>
+                </div>
+                <div className='bottom-0 right-0'>
+                    <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold mb-0 mr-0 rounded focus:outline-none focus:shadow-outline" 
+                    onClick={handleClick}>X</button>
                 </div>
             </div>
+        </div>
       
         
     );
 }
-
-
 export default Calender;
+
 
 
 
